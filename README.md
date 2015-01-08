@@ -1,6 +1,8 @@
 # RPCModDevelopmentEnvironment
 A gradle project to allow developers to quickly get setup to develop mods for Retro Pixel Castles
 
+This setup was tested using indev 12 unstable 2
+
 currently the project supports the use of Intellij IDEA, but should also work with Eclipse.
 If someone gets it working create a step by step and add it to this readme
 
