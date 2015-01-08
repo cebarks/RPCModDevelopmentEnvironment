@@ -1,0 +1,141 @@
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'application'
+
+mainClassName = mainClass
+compileJava.options.encoding = 'UTF-8'
+sourceCompatibility = 1.8
+version = '1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+    compile fileTree(dir: 'lib/jars', include: '*.jar')
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir rpcSrcDir
+        }
+    }
+}
+
+jar {
+    manifest {
+        attributes(
+            "Manifest-Version"  : "1.0",
+            "Main-Class"        : mainClass,
+            "Class-Path"        : fileTree(dir:'lib/jars',include:'*.jar').collect { "lib/jars/$it.name" }.join(" ")
+        )
+    }
+
+    doLast {
+        copy {
+            from fileTree(dir: './', include: ['lib/', 'res/', 'maps/'])
+            into 'build/libs'
+        }
+    }
+}
+
+task decompile(type: JavaExec) {
+    doFirst {
+        copy {
+            from file("$installDirectory/Core.jar")
+            into 'tmp/'
+        }
+
+        file("tmp/decomp-classes").mkdirs()
+    }
+
+	inputs.file file('tmp/Core.jar')
+	outputs.file fileTree(dir: rpcSrcDir, include: '**/*.java')
+    main = "-jar"
+    args relativePath("java-decompiler.jar")
+    args "-dgs=1 -den=1 -lac=1 -nls=1 -rsy=1 -ind=    "
+    args relativePath("tmp/Core.jar")
+    args relativePath("tmp/decomp-classes")
+
+    doLast {
+        copy {
+            from zipTree("tmp/decomp-classes/Core.jar")
+            into rpcSrcDir
+        }
+
+        delete "$rpcSrcDir/META-INF", fileTree(dir: rpcSrcDir, include: "*.jar"), "$rpcSrcDir/org/eclipse"
+		
+		def fileObj = file("$rpcSrcDir/rpc/guielements/play/Top.java")
+		def scanner = new Scanner(fileObj)
+		def content = new StringBuilder()
+
+		while(scanner.hasNextLine()) {
+			String line = scanner.nextLine()
+			content.append(line.replaceAll("Collections.sort\\(entityList, new Comparator\\(\\) \\{", "Collections.sort\\(entityList, new Comparator<EntityBase>\\(\\) \\{"))
+			content.append(System.lineSeparator())
+		}
+		scanner.close()
+
+		def writer = new PrintWriter(fileObj)
+		writer.print(content.toString())
+		writer.flush()
+		writer.close()
+
+		fileObj = file("$rpcSrcDir/rpc/entities/EntityModule.java")
+		scanner = new Scanner(fileObj)
+		content = new StringBuilder()
+
+		while(scanner.hasNextLine()) {
+			String line = scanner.nextLine()
+			content.append(line.replaceAll("Collections.sort\\(this.entityArray, new Comparator\\(\\) \\{", "Collections.sort\\(this.entityArray, new Comparator<EntityBase>\\(\\) \\{"))
+			content.append(System.lineSeparator())
+		}
+		scanner.close()
+
+		writer = new PrintWriter(fileObj)
+		writer.print(content)
+		writer.flush()
+		writer.close()
+    }
+}
+
+task setupProject {
+	inputs.file fileTree(dir: "$installDirectory/", include: ['maps/', 'lib/', 'res/'])
+	outputs.file fileTree(dir: "./", include: ['maps/', 'lib/', 'res/'])
+
+	doLast {
+		copy {
+			from fileTree(dir: "$installDirectory/", include: ['maps/', 'lib/', 'res/'])
+			into './'
+		}
+
+		println "Finished setting up project"
+	}
+}
+
+task cleanResources {
+	inputs.file fileTree(dir: './', include: ['lib/', 'logs/', 'maps/', 'profiles/', 'res/', 'tmp/', rpcSrcDir])
+	outputs.file fileTree(dir: './', include: ['lib/', 'logs/', 'maps/', 'profiles/', 'res/', 'tmp/', rpcSrcDir])
+	doLast {
+		delete 'lib/', 'logs/', 'maps/', 'profiles/', 'res/', 'tmp/', rpcSrcDir
+	}
+}
+
+task fullClean(dependsOn: ['clean', 'cleanResources', 'cleanIdea', 'cleanIdeaWorkspace'])
+
+idea {
+	project {
+		languageLevel = '1.7'
+	}
+	
+	module {
+		sourceDirs += file("$rpcSrcDir")
+	}
+}
+
+setupProject.dependsOn decompile
+setupProject.dependsOn tasks.idea
+
+
