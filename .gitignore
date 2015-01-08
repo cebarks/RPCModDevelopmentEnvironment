@@ -62,3 +62,13 @@ build/
 
 ## OS Specific
 .DS_Store
+
+
+## Project Specific
+lib/
+logs/
+maps/
+profiles/
+res/
+tmp/
+src/generated
