@@ -7,6 +7,25 @@ compileJava.options.encoding = 'UTF-8'
 sourceCompatibility = 1.8
 version = '1.0'
 
+buildscript {
+	repositories {
+		mavenCentral()
+	}
+
+	dependencies {
+		classpath 'org.tmatesoft.svnkit:svnkit:1.8.7'
+		classpath 'net.dongliu:jvcdiff:1.2.3'
+	}
+}
+
+import org.tmatesoft.svn.core.wc.*
+import org.tmatesoft.svn.core.*
+import net.dongliu.vcdiff.VcdiffDecoder
+
+import java.nio.file.Files
+import java.nio.file.Paths;
+
+
 repositories {
     mavenCentral()
 }
@@ -66,38 +85,6 @@ task decompile(type: JavaExec) {
         }
 
         delete "$rpcSrcDir/META-INF", fileTree(dir: rpcSrcDir, include: "*.jar"), "$rpcSrcDir/org/eclipse"
-		
-		def fileObj = file("$rpcSrcDir/rpc/guielements/play/Top.java")
-		def scanner = new Scanner(fileObj)
-		def content = new StringBuilder()
-
-		while(scanner.hasNextLine()) {
-			String line = scanner.nextLine()
-			content.append(line.replaceAll("Collections.sort\\(entityList, new Comparator\\(\\) \\{", "Collections.sort\\(entityList, new Comparator<EntityBase>\\(\\) \\{"))
-			content.append(System.lineSeparator())
-		}
-		scanner.close()
-
-		def writer = new PrintWriter(fileObj)
-		writer.print(content.toString())
-		writer.flush()
-		writer.close()
-
-		fileObj = file("$rpcSrcDir/rpc/entities/EntityModule.java")
-		scanner = new Scanner(fileObj)
-		content = new StringBuilder()
-
-		while(scanner.hasNextLine()) {
-			String line = scanner.nextLine()
-			content.append(line.replaceAll("Collections.sort\\(this.entityArray, new Comparator\\(\\) \\{", "Collections.sort\\(this.entityArray, new Comparator<EntityBase>\\(\\) \\{"))
-			content.append(System.lineSeparator())
-		}
-		scanner.close()
-
-		writer = new PrintWriter(fileObj)
-		writer.print(content)
-		writer.flush()
-		writer.close()
     }
 }
 
@@ -119,7 +106,7 @@ task cleanResources {
 	inputs.file fileTree(dir: './', include: ['lib/', 'logs/', 'maps/', 'profiles/', 'res/', 'tmp/', rpcSrcDir])
 	outputs.file fileTree(dir: './', include: ['lib/', 'logs/', 'maps/', 'profiles/', 'res/', 'tmp/', rpcSrcDir])
 	doLast {
-		delete 'lib/', 'logs/', 'maps/', 'profiles/', 'res/', 'tmp/', rpcSrcDir
+		delete 'lib/', 'logs/', 'maps/', 'profiles/', 'res/', 'tmp/', rpcSrcDir, 'patch'
 	}
 }
 
@@ -135,7 +122,69 @@ idea {
 	}
 }
 
-setupProject.dependsOn decompile
-setupProject.dependsOn tasks.idea
+task getRPCPatch << {
+	def game = file("$rpcSrcDir/rpc/launcher/Game.java")
+	def version = null
+	game.eachLine { line ->
+		line = line.trim()
+		if(line.matches('private static final String gameVersion = ".*";')) {
+			def split = line.split('"')
+			version = split[1].replaceAll(' ', '')
+		}
+	}
 
+	if(version == null) {
+		println 'unable to locate game version from source'
+	}
+	else {
+		//check if the patch has already been downloaded else grab it
+		def patch = file('patch')
+		if(!patch.exists() || (patch.isDirectory() && patch.listFiles().length == 0)) {
+			def clientManager = SVNClientManager.newInstance()
+			SVNUpdateClient update = clientManager.getUpdateClient()
 
+			try {
+				SVNURL url = SVNURL.parseURIEncoded("https://github.com/Emeegeemee/RPCPatches/trunk/patches/$version/")
+				update.doCheckout(url, patch, SVNRevision.HEAD, SVNRevision.HEAD, SVNDepth.INFINITY, true)
+
+				delete 'patch/.svn/'
+			}
+			catch (SVNException e) {
+				def errorCode = e.getErrorMessage().getErrorCode()
+				if (SVNErrorCode.UNSUPPORTED_FEATURE.equals(errorCode)) {
+					println 'Patch points to a file not a directory'
+				} else if (SVNErrorCode.RA_ILLEGAL_URL.equals(errorCode)) {
+					println "The requested patch doesn't exist"
+				} else {
+					println 'unknown svn exception'
+					e.printStackTrace();
+				}
+
+				return
+			}
+		}
+
+		def closure
+		closure = { path ->
+			def patchFolder = file("patch$path")
+
+			patchFolder.eachDir {closure("$path/$it.name")}
+
+			patchFolder.eachFile(groovy.io.FileType.FILES, {
+				def patchFile = file("patch$path/$it.name")
+				def sourceFile = file("tmp/$it.name")
+				def targetFile = file("$rpcSrcDir$path/$it.name")
+
+				Files.copy(Paths.get(targetFile.toURI()), Paths.get(sourceFile.toURI()))
+
+				VcdiffDecoder.decode(sourceFile, patchFile, targetFile)
+
+				delete "tmp/$it.name"
+			})
+		}
+		closure('')
+	}
+}
+
+getRPCPatch.dependsOn decompile
+setupProject.dependsOn getRPCPatch

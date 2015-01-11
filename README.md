@@ -16,7 +16,7 @@ installDirectory=C:/Program Files (x86)/Steam/SteamApps/common/Retro-Pixel Castl
 Once changed, open your command shell and run:
 
 ```
-gradlew setupProject
+gradlew setupProject idea
 ```
 
 Open the project with Intellij IDEA by double clicking build.gradle while in the open dialog box.
