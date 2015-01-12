@@ -22,8 +22,10 @@ import org.tmatesoft.svn.core.wc.*
 import org.tmatesoft.svn.core.*
 import net.dongliu.vcdiff.VcdiffDecoder
 
+import java.nio.file.CopyOption
 import java.nio.file.Files
-import java.nio.file.Paths;
+import java.nio.file.Paths
+import java.nio.file.StandardCopyOption;
 
 
 repositories {
@@ -71,7 +73,7 @@ task decompile(type: JavaExec) {
     }
 
 	inputs.file file('tmp/Core.jar')
-	outputs.file fileTree(dir: rpcSrcDir, include: '**/*.java')
+	//outputs.file fileTree(dir: rpcSrcDir, include: '**/*.java')
     main = "-jar"
     args relativePath("java-decompiler.jar")
     args "-dgs=1 -den=1 -lac=1 -nls=1 -rsy=1 -ind=    "
@@ -172,14 +174,21 @@ task getRPCPatch << {
 
 			patchFolder.eachFile(groovy.io.FileType.FILES, {
 				def patchFile = file("patch$path/$it.name")
-				def sourceFile = file("tmp/$it.name")
 				def targetFile = file("$rpcSrcDir$path/$it.name")
 
-				Files.copy(Paths.get(targetFile.toURI()), Paths.get(sourceFile.toURI()))
+				if(it.name.endsWith(".patch")) {
+					if (targetFile.exists()) {
+						def sourceFile = file("tmp/$it.name")
 
-				VcdiffDecoder.decode(sourceFile, patchFile, targetFile)
-
-				delete "tmp/$it.name"
+						Files.copy(Paths.get(targetFile.toURI()), Paths.get(sourceFile.toURI()))
+						VcdiffDecoder.decode(sourceFile, patchFile, targetFile)
+						delete "tmp/$it.name"
+					}
+				}
+				else {
+					file("$rpcSrcDir$path/").mkdirs()
+					Files.copy(Paths.get(patchFile.toURI()), Paths.get(targetFile.toURI()), StandardCopyOption.REPLACE_EXISTING)
+				}
 			})
 		}
 		closure('')
