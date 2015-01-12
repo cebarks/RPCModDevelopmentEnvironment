@@ -173,8 +173,9 @@ task getRPCPatch << {
 			patchFolder.eachDir {closure("$path/$it.name")}
 
 			patchFolder.eachFile(groovy.io.FileType.FILES, {
-				def patchFile = file("patch$path/$it.name")
-				def targetFile = file("$rpcSrcDir$path/$it.name")
+				def patchFile = file("patch$path/${it.name}")
+				def name = it.name.replaceAll('\\.patch', "")
+				def targetFile = file("$rpcSrcDir$path/$name")
 
 				if(it.name.endsWith(".patch")) {
 					if (targetFile.exists()) {
@@ -195,5 +196,5 @@ task getRPCPatch << {
 	}
 }
 
-getRPCPatch.dependsOn decompile
+//getRPCPatch.dependsOn decompile
 setupProject.dependsOn getRPCPatch
