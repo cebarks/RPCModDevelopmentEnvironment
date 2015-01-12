@@ -196,5 +196,5 @@ task getRPCPatch << {
 	}
 }
 
-//getRPCPatch.dependsOn decompile
+getRPCPatch.dependsOn decompile
 setupProject.dependsOn getRPCPatch
