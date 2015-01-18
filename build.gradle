@@ -22,7 +22,6 @@ import org.tmatesoft.svn.core.wc.*
 import org.tmatesoft.svn.core.*
 import net.dongliu.vcdiff.VcdiffDecoder
 
-import java.nio.file.CopyOption
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption;
@@ -63,17 +62,19 @@ jar {
 }
 
 task decompile(type: JavaExec) {
-    doFirst {
-        copy {
-            from file("$installDirectory/Core.jar")
-            into 'tmp/'
-        }
+	doFirst {
+		copy {
+			from file("$installDirectory/Core.jar")
+			into 'tmp/'
+		}
 
-        file("tmp/decomp-classes").mkdirs()
-    }
+		file("tmp/decomp-classes").mkdirs()
+	}
 
-	inputs.file file('tmp/Core.jar')
-	//outputs.file fileTree(dir: rpcSrcDir, include: '**/*.java')
+	inputs.file file("$installDirectory/Core.jar")
+	outputs.upToDateWhen {
+		return file(rpcSrcDir).exists()
+	}
     main = "-jar"
     args relativePath("java-decompiler.jar")
     args "-dgs=1 -den=1 -lac=1 -nls=1 -rsy=1 -ind=    "
@@ -182,6 +183,9 @@ task getRPCPatch << {
 						def sourceFile = file("tmp/$it.name")
 
 						Files.copy(Paths.get(targetFile.toURI()), Paths.get(sourceFile.toURI()))
+
+						println it.name
+
 						VcdiffDecoder.decode(sourceFile, patchFile, targetFile)
 						delete "tmp/$it.name"
 					}
